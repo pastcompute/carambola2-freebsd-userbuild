@@ -97,10 +97,13 @@ if [ $OPT_KERNEL = yes ] ; then
   ~/freebsd-wifi-build/build/bin/build carambola2  installkernel
 fi
 ~/freebsd-wifi-build/build/bin/build carambola2  distribution
-~/freebsd-wifi-build/build/bin/build carambola2  mfsroot || true
+
+rm -rf ../mfsroot
+fakeroot ~/freebsd-wifi-build/build/bin/build carambola2  mfsroot || true
 
 cd ${X_SELF_DIR}
 
+INSTALL_PROG="fakeroot install"
 ${INSTALL_PROG} ${X_DESTDIR}/bin/date ${X_STAGING_FSROOT}/bin/
 ${INSTALL_PROG} ${X_DESTDIR}/bin/kill ${X_STAGING_FSROOT}/sbin/
 # ${INSTALL_PROG} ${X_DESTDIR}/sbin/bsdbox ${X_STAGING_FSROOT}/bin/
@@ -109,7 +112,10 @@ ${INSTALL_PROG} ${X_DESTDIR}/sbin/sha256 ${X_STAGING_FSROOT}/sbin/
 ${INSTALL_PROG} ${X_DESTDIR}/sbin/sha512 ${X_STAGING_FSROOT}/sbin/
 ${INSTALL_PROG} ${X_DESTDIR}/sbin/pfctl ${X_STAGING_FSROOT}/sbin/
 ${INSTALL_PROG} ${X_DESTDIR}/sbin/pflogd ${X_STAGING_FSROOT}/sbin/
-
+${INSTALL_PROG} ${X_DESTDIR}/sbin/pflogd ${X_STAGING_FSROOT}/sbin/
+${INSTALL_PROG} ${X_DESTDIR}/sbin/dhclient ${X_STAGING_FSROOT}/sbin/
+${INSTALL_PROG} ${X_DESTDIR}/usr/sbin/pw ${X_STAGING_FSROOT}/usr/sbin/
+${INSTALL_PROG} ${X_DESTDIR}/etc/rc.d/dhclient ${X_STAGING_FSROOT}/c/etc/rc.d/
 
 X_FROM=${X_PORTSBUILD}/staging/install
 
@@ -129,20 +135,30 @@ ${INSTALL_PROG} ${X_FROM}/libexec/dhcpcd-hooks/* ${X_STAGING_FSROOT}/libexec/dhc
 
 fakeroot pwd_mkdb -d ${X_STAGING_FSROOT}/c/etc ${X_STAGING_FSROOT}/c/etc/master.passwd
 echo root | fakeroot pw -V ${X_STAGING_FSROOT}/c/etc usermod root -h0 -c 'Here\ Lies\ Root' -C ${X_STAGING_FSROOT}/c/etc/pw.conf
+echo user | fakeroot pw -V ${X_STAGING_FSROOT}/c/etc usermod user -h0 -c -C ${X_STAGING_FSROOT}/c/etc/pw.conf
 rm ${X_STAGING_FSROOT}/c/etc/spwd.db ${X_STAGING_FSROOT}/c/etc/pwd.db
 
 ${INSTALL_PROG} scripts/files/rc.conf ${X_STAGING_FSROOT}/c/etc/cfg/
 ${INSTALL_PROG} scripts/files/login.conf ${X_STAGING_FSROOT}/c/etc/
 ${INSTALL_PROG} scripts/files/dhcpcd.conf ${X_STAGING_FSROOT}/c/etc/
 
+# WE NEED vt100 in login.conf or cant login!
+
+sed -e '/^exit 0/d' -i "" ${X_STAGING_FSROOT}/c/etc/rc2
+echo 'pw usershow root' >> ${X_STAGING_FSROOT}/c/etc/rc2
+echo 'pw usershow user' >> ${X_STAGING_FSROOT}/c/etc/rc2
+echo 'ls -l /etc' >> ${X_STAGING_FSROOT}/c/etc/rc2
+echo 'exit 0' >> ${X_STAGING_FSROOT}/c/etc/rc2
 
 # Disable telnetd
 sed -e '/^telnet/d' -i "" ${X_STAGING_FSROOT}/c/etc/inetd.conf
 rm ${X_STAGING_FSROOT}/usr/libexec/telnetd
 
+# fakeroot find ${X_STAGING_FSROOT} -ls
+
 # FIXME kernel modules are broken?
 cd freebsd-release-10.0.0
-~/freebsd-wifi-build/build/bin/build carambola2 fsimage
+fakeroot ~/freebsd-wifi-build/build/bin/build carambola2 fsimage
 ~/freebsd-wifi-build/build/bin/build carambola2 uboot
 
 # dnsmasq??? dyndns
