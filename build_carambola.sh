@@ -1,10 +1,16 @@
 #!/bin/sh
 
+# noworld nokernel noports
+
 # Assumes we are sitting in ~/build, run as scripts/
 set -e
 set -x
 X_SELF_DIR=`pwd`
-cd freebsd-release-10.0.0
+
+# Deps: gmake bison dialog4ports git wget subversion fakeroot lzma uboot-mkimage libtool
+# Optional deps: vim screen less tcpdump
+# Deps: bash xorg urwfonts xdm openbox gedit
+# Later optional deps: gcc48
 
 # pkg install gcc48 to try out later
 # mkdir portsnap ports
@@ -13,20 +19,29 @@ cd freebsd-release-10.0.0
 # git init???
 INSTALL_PROG=install
 
-if true ; then
-  rm -rf obj root mfsroot tmp
-  scripts/cleanports.sh
+if [ "x$1" = "xclean" ] ; then
+  rm -rf obj root mfsroot* tmp
+  scripts/clean_ports.sh
+  exit 0
 fi
-~/freebsd-wifi-build/build/bin/build carambola2  buildworld 
-~/freebsd-wifi-build/build/bin/build carambola2  buildkernel 
-~/freebsd-wifi-build/build/bin/build carambola2  installworld installkernel distribution
-~/freebsd-wifi-build/build/bin/build carambola2  mfsroot || true
 
-# FIXME kernel modules are broken
+OPT_WORLD=yes
+OPT_KERNEL=yes
+OPT_PORTS=yes
+while [ "x$1" != "x" ]; do
+  if [ "x$1" = "xnoworld" ] ; then OPT_WORLD=no ; shift ; fi
+  if [ "x$1" = "xnokernel" ] ; then OPT_KERNEL=no ; shift ; fi
+  if [ "x$1" = "xnoports" ] ; then OPT_PORTS=no ; shift ; fi
+done
 
-# Builddep: bison gmake libtool
+cd freebsd-release-10.0.0
+if [ $OPT_WORLD = yes ] ; then
+  ~/freebsd-wifi-build/build/bin/build carambola2  buildworld 
+fi
 
-cd ${X_SELF_DIR}
+if [ $OPT_KERNEL = yes ] ; then
+  ~/freebsd-wifi-build/build/bin/build carambola2  buildkernel 
+fi
 
 X_STAGING_FSROOT=${X_SELF_DIR}/mfsroot/carambola2
 X_DESTDIR=${X_SELF_DIR}/root/mips
@@ -35,6 +50,8 @@ DOWNLOADS=${X_SELF_DIR}/ports-distfiles
 X_PORTS=${X_SELF_DIR}/ports
 X_PORTSBUILD=${X_SELF_DIR}/ports-build
 
+
+# TODO: od vi not ee
 PACKAGES="${X_PORTS}/sysutils/less ${X_PORTS}/net-mgmt/libsmi ${X_PORTS}/net/libpcap ${X_PORTS}/net/tcpdump ${X_PORTS}/net/dhcpcd ${X_PORTS}/net/netcat ${X_PORTS}/net/rsync"
 
 # We need fakeroot for `mtree`
@@ -52,30 +69,40 @@ PACKAGES="${X_PORTS}/sysutils/less ${X_PORTS}/net-mgmt/libsmi ${X_PORTS}/net/lib
 
 	    	\
 
-for p in $PACKAGES ; do
-  WORKING=`dirname $p`
-  WORKING=`basename $WORKING`/`basename $p`
-  cd $p                                                             # We need fakeroot for `mtree`
-  fakeroot make PORTSDIR=${X_PORTS} \
-              __MAKE_CONF=${X_SELF_DIR}/root/make.conf.mips DISABLE_MAKE_JOBS=yes \
-              DISTDIR=${DOWNLOADS} \
-              PORT_DBDIR=${X_PORTSBUILD}/db \
-              WRKDIR=${X_PORTSBUILD}/w/${WORKING}/work \
-              STAGEDIR=${X_PORTSBUILD}/staging \
-              PREFIX=/install \
-              INSTALL_AS_USER=yes \
-              TARGET=mips TARGET_ARCH=mips TARGET_CPUTYPE=mips32 \
-              NO_DEPENDS=1 NO_PKG_REGISTER=1 DB_FROM_SRC=1 \
-              BUILD_FLAGS=NO_CLEAN=1 \
-              -DDISABLE_VULNERABILITIES \
-                install
-done
+if [ $OPT_PORTS = yes ] ; then
+  for p in $PACKAGES ; do
+    WORKING=`dirname $p`
+    WORKING=`basename $WORKING`/`basename $p`
+    cd $p                                                             # We need fakeroot for `mtree`
+    fakeroot make PORTSDIR=${X_PORTS} \
+                __MAKE_CONF=${X_SELF_DIR}/root/make.conf.mips DISABLE_MAKE_JOBS=yes \
+                DISTDIR=${DOWNLOADS} \
+                PORT_DBDIR=${X_PORTSBUILD}/db \
+                WRKDIR=${X_PORTSBUILD}/w/${WORKING}/work \
+                STAGEDIR=${X_PORTSBUILD}/staging \
+                PREFIX=/install \
+                INSTALL_AS_USER=yes \
+                TARGET=mips TARGET_ARCH=mips TARGET_CPUTYPE=mips32 \
+                NO_DEPENDS=1 NO_PKG_REGISTER=1 DB_FROM_SRC=1 \
+                BUILD_FLAGS=NO_CLEAN=1 \
+                -DDISABLE_VULNERABILITIES \
+                  install
+  done
+fi
+
+if [ $OPT_WORLD = yes ] ; then
+  ~/freebsd-wifi-build/build/bin/build carambola2  installworld
+fi
+if [ $OPT_KERNEL = yes ] ; then
+  ~/freebsd-wifi-build/build/bin/build carambola2  installkernel
+fi
+~/freebsd-wifi-build/build/bin/build carambola2  distribution
+~/freebsd-wifi-build/build/bin/build carambola2  mfsroot || true
 
 cd ${X_SELF_DIR}
 
-
 ${INSTALL_PROG} ${X_DESTDIR}/bin/date ${X_STAGING_FSROOT}/bin/
-${INSTALL_PROG} ${X_DESTDIR}/bin/kill ${X_STAGING_FSROOT}/bin/
+${INSTALL_PROG} ${X_DESTDIR}/bin/kill ${X_STAGING_FSROOT}/sbin/
 # ${INSTALL_PROG} ${X_DESTDIR}/sbin/bsdbox ${X_STAGING_FSROOT}/bin/
 ${INSTALL_PROG} ${X_DESTDIR}/sbin/sha1 ${X_STAGING_FSROOT}/sbin/
 ${INSTALL_PROG} ${X_DESTDIR}/sbin/sha256 ${X_STAGING_FSROOT}/sbin/
@@ -85,23 +112,46 @@ ${INSTALL_PROG} ${X_DESTDIR}/sbin/pflogd ${X_STAGING_FSROOT}/sbin/
 
 
 X_FROM=${X_PORTSBUILD}/staging/install
+
 ${INSTALL_PROG} ${X_FROM}/bin/less ${X_STAGING_FSROOT}/bin/
-${INSTALL_PROG} ${X_FROM}/bin/netcat ${X_STAGING_FSROOT}/bin/
-${INSTALL_PROG} ${X_FROM}/bin/rsync ${X_STAGING_FSROOT}/bin/
+
+${INSTALL_PROG} ${X_FROM}/bin/netcat ${X_STAGING_FSROOT}/sbin/
+${INSTALL_PROG} ${X_FROM}/bin/rsync ${X_STAGING_FSROOT}/sbin/
 ${INSTALL_PROG} ${X_FROM}/sbin/tcpdump ${X_STAGING_FSROOT}/sbin/
 ${INSTALL_PROG} ${X_FROM}/sbin/dhcpcd ${X_STAGING_FSROOT}/sbin/
+
 ${INSTALL_PROG} ${X_FROM}/lib/lib* ${X_STAGING_FSROOT}/lib/
-${INSTALL_PROG} ${X_FROM}/etc/rc.d/dhcpcd ${X_STAGING_FSROOT}/etc/
-${INSTALL_PROG} ${X_FROM}/etc/dhcpcd.conf.sample ${X_STAGING_FSROOT}/etc/dhcpcd.conf
+${INSTALL_PROG} ${X_FROM}/etc/rc.d/dhcpcd ${X_STAGING_FSROOT}/c/etc/
+${INSTALL_PROG} ${X_FROM}/etc/dhcpcd.conf.sample ${X_STAGING_FSROOT}/c/etc/dhcpcd.conf
 ${INSTALL_PROG} ${X_FROM}/libexec/dhcpcd-run-hooks ${X_STAGING_FSROOT}/libexec/
-${INSTALL_PROG} -d ${X_FROM}/libexec/dhcpcd-hooks/* ${X_STAGING_FSROOT}/libexec/dhcpcd-hooks/
-# ${INSTALL_PROG} ${X_FROM}/etc/rc.d/rsyncd ${X_STAGING_FSROOT}/etc/
+${INSTALL_PROG} -d ${X_STAGING_FSROOT}/libexec/dhcpcd-hooks/
+${INSTALL_PROG} ${X_FROM}/libexec/dhcpcd-hooks/* ${X_STAGING_FSROOT}/libexec/dhcpcd-hooks/
+
+fakeroot pwd_mkdb -d ${X_STAGING_FSROOT}/c/etc ${X_STAGING_FSROOT}/c/etc/master.passwd
+echo root | fakeroot pw -V ${X_STAGING_FSROOT}/c/etc usermod root -h0 -c 'Here\ Lies\ Root' -C ${X_STAGING_FSROOT}/c/etc/pw.conf
+rm ${X_STAGING_FSROOT}/c/etc/spwd.db ${X_STAGING_FSROOT}/c/etc/pwd.db
+
+${INSTALL_PROG} scripts/files/rc.conf ${X_STAGING_FSROOT}/c/etc/cfg/
+${INSTALL_PROG} scripts/files/login.conf ${X_STAGING_FSROOT}/c/etc/
+${INSTALL_PROG} scripts/files/dhcpcd.conf ${X_STAGING_FSROOT}/c/etc/
 
 
+# Disable telnetd
+sed -e '/^telnet/d' -i "" ${X_STAGING_FSROOT}/c/etc/inetd.conf
+rm ${X_STAGING_FSROOT}/usr/libexec/telnetd
 
-
-~/freebsd-wifi-build/build/bin/build carambola2  fsimage uboot
+# FIXME kernel modules are broken?
+cd freebsd-release-10.0.0
+~/freebsd-wifi-build/build/bin/build carambola2 fsimage
+~/freebsd-wifi-build/build/bin/build carambola2 uboot
 
 # dnsmasq??? dyndns
 
 # POST INSTALL: ldconfig ?
+
+X_FLASH=/tftpboot/kernel.CARAMBOLA2.lzma.flash
+dd if=/dev/zero bs=$(( 0x200000 )) count=1 of=${X_FLASH}
+dd if=/tftpboot/kernel.CARAMBOLA2.lzma.uImage of=${X_FLASH} conv=notrunc
+dd if=/tftpboot/mfsroot-carambola2.img.ulzma >> ${X_FLASH}
+
+ls -l ${X_FLASH}
