@@ -28,8 +28,6 @@ setenv serverip 192.168.0.107
 saveenv
 
 erase 0x9f050000 +0xd90000
-
-
 tftpboot 0x80050000 kernel.CARAMBOLA2.lzma.flash
 cp.b 0x80050000 0x9f050000 $filesize
 reset
