@@ -5,8 +5,9 @@
 # Assumes we are sitting in ~/build, run as scripts/
 set -e
 X_SELF_DIR=`pwd`
+FWB=${X_SELF_DIR}/freebsd-wifi-build
 
-SOURCES=freebsd-release-10.1.0
+SOURCES=${SOURCES:-${X_SELF_DIR}/freebsd-release-10.1.0}
 
 # Deps: gmake bison dialog4ports git wget subversion fakeroot lzma uboot-mkimage libtool
 # Optional deps: vim screen less tcpdump
@@ -17,7 +18,7 @@ SOURCES=freebsd-release-10.1.0
 # mkdir portsnap ports
 # portsnap -d portsnap fetch
 # portsnap -p ports extract
-# git init???
+# I might use git annex locally to manage downloads
 INSTALL_PROG=install
 
 if [ "x$1" = "xclean" ] ; then
@@ -39,11 +40,11 @@ done
 
 cd ${SOURCES}
 if [ $OPT_WORLD = yes ] ; then
-  ~/freebsd-wifi-build/build/bin/build carambola2  buildworld 
+  ${FWB}/build/bin/build carambola2  buildworld
 fi
 
 if [ $OPT_KERNEL = yes ] ; then
-  ~/freebsd-wifi-build/build/bin/build carambola2  buildkernel 
+  ${FWB}/build/bin/build carambola2  buildkernel
 fi
 
 X_STAGING_FSROOT=${X_SELF_DIR}/mfsroot/carambola2
@@ -78,7 +79,7 @@ ${X_PORTS}/net/rsync"
 # NO_DEPENDS=1 NO_PKG_REGISTER=1 DB_FROM_SRC=1          # <-- depends check looks for libs.so's in wrong place
 #
 # Each port:                                              <-- ./ports-build/work/sysutils/less-458 (etc)
-
+# We needed fakeroot for `mtree` even before we used it everywhere
 
 X_FROM=${X_PORTSBUILD}/staging/install
 CROSS=${X_SELF_DIR}/obj/mips/mips.mips/usr/home/andrew/build/freebsd-release-10.1.0/tmp/usr/bin
@@ -88,7 +89,7 @@ if [ $OPT_PORTS = yes ] ; then
   for p in $PACKAGES ; do
     WORKING=`dirname $p`
     WORKING=`basename $WORKING`/`basename $p`
-    cd $p                                                             # We need fakeroot for `mtree`
+    cd $p                                                             
     fakeroot make PORTSDIR=${X_PORTS} \
                 __MAKE_CONF=${X_SELF_DIR}/root/make.conf.mips DISABLE_MAKE_JOBS=yes \
                 DISTDIR=${DOWNLOADS} \
@@ -122,24 +123,24 @@ if [ $OPT_PORTS = yes ] ; then
   done
 fi
 
-cd ${X_SELF_DIR}/${SOURCES}
+cd ${SOURCES}
 
 if [ $OPT_WORLD = yes ] ; then
-  ~/freebsd-wifi-build/build/bin/build carambola2  installworld
+  ${FWB}/build/bin/build carambola2  installworld
 fi
 if [ $OPT_KERNEL = yes ] ; then
-  ~/freebsd-wifi-build/build/bin/build carambola2  installkernel
+  ${FWB}/build/bin/build carambola2  installkernel
 fi
 if [ $OPT_DIST = yes ] ; then
-~/freebsd-wifi-build/build/bin/build carambola2  distribution
+  ${FWB}/build/bin/build carambola2  distribution
 fi
 
 rm -rf ../mfsroot
-fakeroot ~/freebsd-wifi-build/build/bin/build carambola2  mfsroot || true
+fakeroot ${FWB}/build/bin/build carambola2 mfsroot || true
 
 
 #INSTALL_PROG="fakeroot install -p -s " 
-# BSD install is stupid it wont copy a symlink as a symlink
+# install is stupid it wont copy a symlink as a symlink
 INSTALL_PROG="fakeroot cp -fPRpv "
 ${INSTALL_PROG} ${X_SELF_DIR}/scripts/files/rc.conf ${X_STAGING_FSROOT}/c/etc/cfg/
 
@@ -156,10 +157,6 @@ ${INSTALL_PROG} ${X_SELF_DIR}/scripts/files/rc.conf ${X_STAGING_FSROOT}/c/etc/cf
 # password login.conf
 # serial terminal locked at 25 high in minicom
 #
-# Ports binaries are broken:
-# less: not a dynamic executable <-- libs needs +x ? Not hon host
-# netcat: Exec format error
-# tcpdump: Exec format error <-- less, libsmi,pcap is 64bit x86 WTF - ports not cross-compiled
 
 # ${INSTALL_PROG} ${X_DESTDIR}/sbin/bsdbox ${X_STAGING_FSROOT}/bin/
 ${INSTALL_PROG} ${X_DESTDIR}/bin/kill ${X_STAGING_FSROOT}/sbin/
@@ -194,15 +191,6 @@ ${INSTALL_PROG} ${X_FROM}/bin/netcat ${X_STAGING_FSROOT}/sbin/
 fakeroot install -d ${X_STAGING_FSROOT}/usr/lib/private/
 ${INSTALL_PROG} ${X_DESTDIR}/usr/lib/private/libssh.so* ${X_STAGING_FSROOT}/usr/lib/private/
 ${INSTALL_PROG} ${X_DESTDIR}/usr/lib/private/libldns.so* ${X_STAGING_FSROOT}/usr/lib/private/
-#${INSTALL_PROG} ${X_DESTDIR}/usr/lib/libgssapi.so* ${X_STAGING_FSROOT}/usr/lib/
-#${INSTALL_PROG} ${X_DESTDIR}/usr/lib/libkrb5.so* ${X_STAGING_FSROOT}/usr/lib/
-#${INSTALL_PROG} ${X_DESTDIR}/usr/lib/libhx509.so* ${X_STAGING_FSROOT}/usr/lib/
-#${INSTALL_PROG} ${X_DESTDIR}/usr/lib/libasn1.so* ${X_STAGING_FSROOT}/usr/lib/
-#${INSTALL_PROG} ${X_DESTDIR}/usr/lib/libcom_err.so* ${X_STAGING_FSROOT}/usr/lib/
-#${INSTALL_PROG} ${X_DESTDIR}/usr/lib/libbroken.so* ${X_STAGING_FSROOT}/lib/
-#${INSTALL_PROG} ${X_DESTDIR}/usr/lib/libwind.so* ${X_STAGING_FSROOT}/lib/
-#${INSTALL_PROG} ${X_DESTDIR}/usr/lib/libheimbase.so* ${X_STAGING_FSROOT}/lib/
-#${INSTALL_PROG} ${X_DESTDIR}/usr/lib/libheimipcc.so* ${X_STAGING_FSROOT}/lib/
 ${INSTALL_PROG} ${X_DESTDIR}/usr/bin/scp ${X_STAGING_FSROOT}/usr/bin/
 ${INSTALL_PROG} ${X_FROM}/bin/rsync ${X_STAGING_FSROOT}/sbin/
 
@@ -214,41 +202,31 @@ ${INSTALL_PROG} ${X_FROM}/lib/libpcap.so* ${X_STAGING_FSROOT}/lib/      # <-- No
 sed -e '/^telnet/d' -i "" ${X_STAGING_FSROOT}/c/etc/inetd.conf
 rm ${X_STAGING_FSROOT}/usr/libexec/telnetd
 
+# Testing stuff I was playing around with to get a restricted login.conf working
 if false ; then
-# RESET BELOW HERE
-
-
-
 fakeroot pwd_mkdb -d ${X_STAGING_FSROOT}/c/etc ${X_STAGING_FSROOT}/c/etc/master.passwd
 echo root | fakeroot pw -V ${X_STAGING_FSROOT}/c/etc usermod root -h0 -c 'Here\ Lies\ Root' -C ${X_STAGING_FSROOT}/c/etc/pw.conf
 echo user | fakeroot pw -V ${X_STAGING_FSROOT}/c/etc usermod user -h0 -c -C ${X_STAGING_FSROOT}/c/etc/pw.conf
 rm ${X_STAGING_FSROOT}/c/etc/spwd.db ${X_STAGING_FSROOT}/c/etc/pwd.db
-
 ${INSTALL_PROG} scripts/files/login.conf ${X_STAGING_FSROOT}/c/etc/
-
 # WE NEED vt100 in login.conf or cant login!
-
 sed -e '/^exit 0/d' -i "" ${X_STAGING_FSROOT}/c/etc/rc2
 echo 'pw usershow root' >> ${X_STAGING_FSROOT}/c/etc/rc2
 echo 'pw usershow user' >> ${X_STAGING_FSROOT}/c/etc/rc2
 echo 'ls -l /etc' >> ${X_STAGING_FSROOT}/c/etc/rc2
 echo 'exit 0' >> ${X_STAGING_FSROOT}/c/etc/rc2
+fi
 # fakeroot find ${X_STAGING_FSROOT} -ls
 
-fi
+cd ${SOURCES}
+fakeroot ${FWB}/build/bin/build carambola2 fsimage
+${FWB}/build/bin/build carambola2 uboot
 
-# FIXME kernel modules are broken?
-cd ${X_SELF_DIR}/${SOURCES}
-fakeroot ~/freebsd-wifi-build/build/bin/build carambola2 fsimage
-~/freebsd-wifi-build/build/bin/build carambola2 uboot
-
-# dnsmasq??? dyndns
-
-# POST INSTALL: ldconfig ?
-
+# Build a combined flash image. Kernel is first 2MB followed by compressed mfs image
 X_FLASH=/tftpboot/kernel.CARAMBOLA2.lzma.flash
 dd if=/dev/zero bs=$(( 0x200000 )) count=1 of=${X_FLASH}
 dd if=/tftpboot/kernel.CARAMBOLA2.lzma.uImage of=${X_FLASH} conv=notrunc
 dd if=/tftpboot/mfsroot-carambola2.img.ulzma >> ${X_FLASH}
 
 ls -l ${X_FLASH}
+
