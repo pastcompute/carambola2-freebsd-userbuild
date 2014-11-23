@@ -73,6 +73,20 @@ Instead of modifying freebsd-wifi-build I hacked my own changes into the firmwar
 
 You can also edit the script to add extra ports.
 
+I did also modify freebsd-wifi-scripts to remove more stuff from the world build:
+
+		+echo 'WITHOUT_GAMES="YES"' >> ${X_DESTDIR}/../src.conf.${BUILDNAME}
+		+echo 'WITHOUT_DOCS="YES"' >> ${X_DESTDIR}/../src.conf.${BUILDNAME}
+		+echo 'WITHOUT_MAN="YES"' >> ${X_DESTDIR}/../src.conf.${BUILDNAME}
+		+echo 'WITHOUT_INFO="YES"' >> ${X_DESTDIR}/../src.conf.${BUILDNAME}
+		+echo 'WITHOUT_LOCALES="YES"' >> ${X_DESTDIR}/../src.conf.${BUILDNAME}
+		+echo 'WITHOUT_NLS="YES"' >> ${X_DESTDIR}/../src.conf.${BUILDNAME}
+		+echo 'WITHOUT_EXAMPLES="YES"' >> ${X_DESTDIR}/../src.conf.${BUILDNAME}
+		+echo 'WITHOUT_ZFS="YES"' >> ${X_DESTDIR}/../src.conf.${BUILDNAME}
+		+echo 'WITHOUT_RCS="YES"' >> ${X_DESTDIR}/../src.conf.${BUILDNAME}
+		+echo 'WITH_INSTALL_AS_USER="YES"' >> ${X_DESTDIR}/../src.conf.${BUILDNAME}
+
+
 7. Run `scripts/build_carambola.sh`
 
     carambola2-freebsd-userbuild/build_carambola.sh
