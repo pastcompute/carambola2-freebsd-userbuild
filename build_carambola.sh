@@ -82,7 +82,9 @@ ${X_PORTS}/net/rsync"
 # We needed fakeroot for `mtree` even before we used it everywhere
 
 X_FROM=${X_PORTSBUILD}/staging/install
-CROSS=${X_SELF_DIR}/obj/mips/mips.mips/usr/home/andrew/build/freebsd-release-10.1.0/tmp/usr/bin
+
+# This might not work in all cases, especially if SOURCES is a relative path
+CROSS=${X_SELF_DIR}/obj/mips/mips.mips/${SOURCES}/tmp/usr/bin
 
 mkdir -p ${X_FROM}
 if [ $OPT_PORTS = yes ] ; then
