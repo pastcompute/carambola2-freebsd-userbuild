@@ -7,7 +7,12 @@ set -e
 X_SELF_DIR=`pwd`
 FWB=${X_SELF_DIR}/freebsd-wifi-build
 
-SOURCES=${SOURCES:-${X_SELF_DIR}/freebsd-release-10.1.0}
+SOURCES=${SOURCES:-${X_SELF_DIR}/freebsd-git}
+#SOURCES=${SOURCES:-${X_SELF_DIR}/freebsd-release-10.1.0}
+
+export X_BUILDASUSER=YES
+export X_SKIP_MORE_STUFF=YES
+export X_FORCE_TFTPCP=YES
 
 # Deps: gmake bison dialog4ports git wget subversion fakeroot lzma uboot-mkimage libtool
 # Optional deps: vim screen less tcpdump
@@ -26,6 +31,8 @@ if [ "x$1" = "xclean" ] ; then
   scripts/clean_ports.sh
   exit 0
 fi
+
+# WARNING: bsdbox is not building in -CURRENT at the moment
 
 OPT_WORLD=yes
 OPT_KERNEL=yes
@@ -167,38 +174,47 @@ ${INSTALL_PROG} ${X_DESTDIR}/sbin/sha1 ${X_STAGING_FSROOT}/sbin/
 ${INSTALL_PROG} ${X_DESTDIR}/sbin/sha256 ${X_STAGING_FSROOT}/sbin/
 ${INSTALL_PROG} ${X_DESTDIR}/sbin/sha512 ${X_STAGING_FSROOT}/sbin/
 
-${INSTALL_PROG} ${X_FROM}/bin/less ${X_STAGING_FSROOT}/bin/
-${INSTALL_PROG} ${X_DESTDIR}/lib/libncurses.so* ${X_STAGING_FSROOT}/lib/
-${INSTALL_PROG} ${X_DESTDIR}/usr/bin/vi ${X_STAGING_FSROOT}/usr/bin/
+if [ $OPT_PORTS = yes ] ; then
+	${INSTALL_PROG} ${X_FROM}/bin/less ${X_STAGING_FSROOT}/bin/
+	${INSTALL_PROG} ${X_DESTDIR}/lib/libncurses.so* ${X_STAGING_FSROOT}/lib/
+	${INSTALL_PROG} ${X_DESTDIR}/usr/bin/vi ${X_STAGING_FSROOT}/usr/bin/
+fi
 
 ${INSTALL_PROG} ${X_DESTDIR}/sbin/pfctl ${X_STAGING_FSROOT}/sbin/
 ${INSTALL_PROG} ${X_DESTDIR}/sbin/pflogd ${X_STAGING_FSROOT}/sbin/
 
-${INSTALL_PROG} ${X_DESTDIR}/sbin/dhclient ${X_STAGING_FSROOT}/sbin/
-${INSTALL_PROG} ${X_DESTDIR}/usr/sbin/pw ${X_STAGING_FSROOT}/usr/sbin/
-${INSTALL_PROG} ${X_DESTDIR}/etc/rc.d/dhclient ${X_STAGING_FSROOT}/c/etc/rc.d/
+if [ $OPT_PORTS = yes ] ; then
+	${INSTALL_PROG} ${X_DESTDIR}/sbin/dhclient ${X_STAGING_FSROOT}/sbin/
+	${INSTALL_PROG} ${X_DESTDIR}/usr/sbin/pw ${X_STAGING_FSROOT}/usr/sbin/
+	${INSTALL_PROG} ${X_DESTDIR}/etc/rc.d/dhclient ${X_STAGING_FSROOT}/c/etc/rc.d/
 
-${INSTALL_PROG} ${X_FROM}/sbin/dhcpcd ${X_STAGING_FSROOT}/sbin/
-${INSTALL_PROG} ${X_FROM}/etc/rc.d/dhcpcd ${X_STAGING_FSROOT}/c/etc/
-${INSTALL_PROG} ${X_FROM}/etc/dhcpcd.conf.sample ${X_STAGING_FSROOT}/c/etc/dhcpcd.conf
-${INSTALL_PROG} ${X_FROM}/libexec/dhcpcd-run-hooks ${X_STAGING_FSROOT}/libexec/
-fakeroot install -d ${X_STAGING_FSROOT}/libexec/dhcpcd-hooks/
-${INSTALL_PROG} ${X_FROM}/libexec/dhcpcd-hooks/* ${X_STAGING_FSROOT}/libexec/dhcpcd-hooks/
+	${INSTALL_PROG} ${X_FROM}/sbin/dhcpcd ${X_STAGING_FSROOT}/sbin/
+	${INSTALL_PROG} ${X_FROM}/etc/rc.d/dhcpcd ${X_STAGING_FSROOT}/c/etc/
+	${INSTALL_PROG} ${X_FROM}/etc/dhcpcd.conf.sample ${X_STAGING_FSROOT}/c/etc/dhcpcd.conf
+	${INSTALL_PROG} ${X_FROM}/libexec/dhcpcd-run-hooks ${X_STAGING_FSROOT}/libexec/
+	fakeroot install -d ${X_STAGING_FSROOT}/libexec/dhcpcd-hooks/
+	${INSTALL_PROG} ${X_FROM}/libexec/dhcpcd-hooks/* ${X_STAGING_FSROOT}/libexec/dhcpcd-hooks/
 
-${INSTALL_PROG} ${X_SELF_DIR}/scripts/files/dhcpcd.conf ${X_STAGING_FSROOT}/c/etc/
+	${INSTALL_PROG} ${X_SELF_DIR}/scripts/files/dhcpcd.conf ${X_STAGING_FSROOT}/c/etc/
+fi
 
 ${INSTALL_PROG} ${X_DESTDIR}/usr/bin/ldd ${X_STAGING_FSROOT}/usr/bin/
-${INSTALL_PROG} ${X_FROM}/bin/netcat ${X_STAGING_FSROOT}/sbin/
 
-fakeroot install -d ${X_STAGING_FSROOT}/usr/lib/private/
-${INSTALL_PROG} ${X_DESTDIR}/usr/lib/private/libssh.so* ${X_STAGING_FSROOT}/usr/lib/private/
-${INSTALL_PROG} ${X_DESTDIR}/usr/lib/private/libldns.so* ${X_STAGING_FSROOT}/usr/lib/private/
-${INSTALL_PROG} ${X_DESTDIR}/usr/bin/scp ${X_STAGING_FSROOT}/usr/bin/
-${INSTALL_PROG} ${X_FROM}/bin/rsync ${X_STAGING_FSROOT}/sbin/
+if [ $OPT_PORTS = yes ] ; then
+	${INSTALL_PROG} ${X_FROM}/bin/netcat ${X_STAGING_FSROOT}/sbin/
+fi
 
-${INSTALL_PROG} ${X_FROM}/sbin/tcpdump ${X_STAGING_FSROOT}/sbin/
-${INSTALL_PROG} ${X_FROM}/lib/libsmi.so* ${X_STAGING_FSROOT}/lib/
-${INSTALL_PROG} ${X_FROM}/lib/libpcap.so* ${X_STAGING_FSROOT}/lib/      # <-- Note, also in the base as libcpap.so.8  so whats the diff?
+if [ $OPT_PORTS = yes ] ; then
+	fakeroot install -d ${X_STAGING_FSROOT}/usr/lib/private/
+	${INSTALL_PROG} ${X_DESTDIR}/usr/lib/private/libssh.so* ${X_STAGING_FSROOT}/usr/lib/private/
+	${INSTALL_PROG} ${X_DESTDIR}/usr/lib/private/libldns.so* ${X_STAGING_FSROOT}/usr/lib/private/
+	${INSTALL_PROG} ${X_DESTDIR}/usr/bin/scp ${X_STAGING_FSROOT}/usr/bin/
+	${INSTALL_PROG} ${X_FROM}/bin/rsync ${X_STAGING_FSROOT}/sbin/
+
+	${INSTALL_PROG} ${X_FROM}/sbin/tcpdump ${X_STAGING_FSROOT}/sbin/
+	${INSTALL_PROG} ${X_FROM}/lib/libsmi.so* ${X_STAGING_FSROOT}/lib/
+	${INSTALL_PROG} ${X_FROM}/lib/libpcap.so* ${X_STAGING_FSROOT}/lib/      # <-- Note, also in the base as libcpap.so.8  so whats the diff?
+fi
 
 # Disable telnetd
 sed -e '/^telnet/d' -i "" ${X_STAGING_FSROOT}/c/etc/inetd.conf
