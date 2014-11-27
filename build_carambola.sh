@@ -7,8 +7,10 @@ set -e
 X_SELF_DIR=`pwd`
 FWB=${X_SELF_DIR}/freebsd-wifi-build
 
-SOURCES=${SOURCES:-${X_SELF_DIR}/freebsd-git}
-#SOURCES=${SOURCES:-${X_SELF_DIR}/freebsd-release-10.1.0}
+# Interestingly it is possible to build -CURRENT kernel with -RELEASE userspace, awesome!
+SOURCES_KERNEL=${SOURCES:-${X_SELF_DIR}/freebsd-git}
+SOURCES=${SOURCES:-${X_SELF_DIR}/freebsd-release-10.1.0}
+#SOURCES_KERNEL=${SOURCES}@Steph_Philbrick that happens to me at work
 
 export X_BUILDASUSER=YES
 export X_SKIP_MORE_STUFF=YES
@@ -45,12 +47,18 @@ while [ "x$1" != "x" ]; do
   if [ "x$1" = "xnodist" ] ; then OPT_DIST=no ; shift ; fi
 done
 
-cd ${SOURCES}
 if [ $OPT_WORLD = yes ] ; then
+  cd ${SOURCES}
   ${FWB}/build/bin/build carambola2  buildworld
 fi
 
 if [ $OPT_KERNEL = yes ] ; then
+  cd ${SOURCES_KERNEL}
+  if [ $OPT_WORLD = yes ] ; then
+    if [ "${SOURCES_KERNEL}" != "${SOURCES}" ] ; then
+      ${FWB}/build/bin/build carambola2  buildworld
+    fi
+  fi
   ${FWB}/build/bin/build carambola2  buildkernel
 fi
 
@@ -93,6 +101,7 @@ X_FROM=${X_PORTSBUILD}/staging/install
 # This might not work in all cases, especially if SOURCES is a relative path
 CROSS=${X_SELF_DIR}/obj/mips/mips.mips/${SOURCES}/tmp/usr/bin
 
+cd ${X_SELF_DIR}
 mkdir -p ${X_FROM}
 if [ $OPT_PORTS = yes ] ; then
   for p in $PACKAGES ; do
@@ -132,19 +141,23 @@ if [ $OPT_PORTS = yes ] ; then
   done
 fi
 
-cd ${SOURCES}
-
 if [ $OPT_WORLD = yes ] ; then
+  cd ${SOURCES}
   ${FWB}/build/bin/build carambola2  installworld
 fi
 if [ $OPT_KERNEL = yes ] ; then
+  cd ${SOURCES_KERNEL}
   ${FWB}/build/bin/build carambola2  installkernel
 fi
 if [ $OPT_DIST = yes ] ; then
+  cd ${SOURCES}
   ${FWB}/build/bin/build carambola2  distribution
 fi
 
-rm -rf ../mfsroot
+cd ${X_SELF_DIR}
+rm -rf mfsroot
+
+cd ${SOURCES}
 fakeroot ${FWB}/build/bin/build carambola2 mfsroot || true
 
 
