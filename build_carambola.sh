@@ -39,6 +39,7 @@ fi
 OPT_WORLD=yes
 OPT_KERNEL=yes
 OPT_PORTS=yes
+OPT_PORTS_INSTALL=yes
 OPT_DIST=yes
 while [ "x$1" != "x" ]; do
   if [ "x$1" = "xnoworld" ] ; then OPT_WORLD=no ; shift ; fi
@@ -99,7 +100,12 @@ ${X_PORTS}/net/rsync"
 X_FROM=${X_PORTSBUILD}/staging/install
 
 # This might not work in all cases, especially if SOURCES is a relative path
+# We also get some pain because /usr/home ==> /home yet it doesnt WTF (pwd --> /home/...)
+# Workaround this for now:
+ln -sf ${X_SELF_DIR}/obj/mips/mips.mips/usr/home ${X_SELF_DIR}/obj/mips/mips.mips/home
 CROSS=${X_SELF_DIR}/obj/mips/mips.mips/${SOURCES}/tmp/usr/bin
+
+echo "Building PORTS using CROSS toolchain `${CROSS}/cc -dumpmachine`"
 
 cd ${X_SELF_DIR}
 mkdir -p ${X_FROM}
@@ -183,11 +189,12 @@ ${INSTALL_PROG} ${X_SELF_DIR}/scripts/files/rc.conf ${X_STAGING_FSROOT}/c/etc/cf
 # ${INSTALL_PROG} ${X_DESTDIR}/sbin/bsdbox ${X_STAGING_FSROOT}/bin/
 ${INSTALL_PROG} ${X_DESTDIR}/bin/kill ${X_STAGING_FSROOT}/sbin/
 ${INSTALL_PROG} ${X_DESTDIR}/bin/date ${X_STAGING_FSROOT}/bin/
+${INSTALL_PROG} ${X_DESTDIR}/usr/bin/which ${X_STAGING_FSROOT}/usr/bin/
 ${INSTALL_PROG} ${X_DESTDIR}/sbin/sha1 ${X_STAGING_FSROOT}/sbin/
 ${INSTALL_PROG} ${X_DESTDIR}/sbin/sha256 ${X_STAGING_FSROOT}/sbin/
 ${INSTALL_PROG} ${X_DESTDIR}/sbin/sha512 ${X_STAGING_FSROOT}/sbin/
 
-if [ $OPT_PORTS = yes ] ; then
+if [ $OPT_PORTS_INSTALL = yes ] ; then
 	${INSTALL_PROG} ${X_FROM}/bin/less ${X_STAGING_FSROOT}/bin/
 	${INSTALL_PROG} ${X_DESTDIR}/lib/libncurses.so* ${X_STAGING_FSROOT}/lib/
 	${INSTALL_PROG} ${X_DESTDIR}/usr/bin/vi ${X_STAGING_FSROOT}/usr/bin/
@@ -196,7 +203,7 @@ fi
 ${INSTALL_PROG} ${X_DESTDIR}/sbin/pfctl ${X_STAGING_FSROOT}/sbin/
 ${INSTALL_PROG} ${X_DESTDIR}/sbin/pflogd ${X_STAGING_FSROOT}/sbin/
 
-if [ $OPT_PORTS = yes ] ; then
+if [ $OPT_PORTS_INSTALL = yes ] ; then
 	${INSTALL_PROG} ${X_DESTDIR}/sbin/dhclient ${X_STAGING_FSROOT}/sbin/
 	${INSTALL_PROG} ${X_DESTDIR}/usr/sbin/pw ${X_STAGING_FSROOT}/usr/sbin/
 	${INSTALL_PROG} ${X_DESTDIR}/etc/rc.d/dhclient ${X_STAGING_FSROOT}/c/etc/rc.d/
@@ -213,11 +220,11 @@ fi
 
 ${INSTALL_PROG} ${X_DESTDIR}/usr/bin/ldd ${X_STAGING_FSROOT}/usr/bin/
 
-if [ $OPT_PORTS = yes ] ; then
+if [ $OPT_PORTS_INSTALL = yes ] ; then
 	${INSTALL_PROG} ${X_FROM}/bin/netcat ${X_STAGING_FSROOT}/sbin/
 fi
 
-if [ $OPT_PORTS = yes ] ; then
+if [ $OPT_PORTS_INSTALL = yes ] ; then
 	fakeroot install -d ${X_STAGING_FSROOT}/usr/lib/private/
 	${INSTALL_PROG} ${X_DESTDIR}/usr/lib/private/libssh.so* ${X_STAGING_FSROOT}/usr/lib/private/
 	${INSTALL_PROG} ${X_DESTDIR}/usr/lib/private/libldns.so* ${X_STAGING_FSROOT}/usr/lib/private/
