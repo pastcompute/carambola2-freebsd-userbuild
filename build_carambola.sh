@@ -57,11 +57,8 @@ X_DOWNLOADS=${X_SELF_DIR}/ports-distfiles
 X_PORTS=${X_SELF_DIR}/ports
 X_PORTSBUILD=${X_SELF_DIR}/ports-build
 X_FROM=${X_PORTSBUILD}/staging/target
-# This might not work in all cases, especially if SOURCES is a relative path
-# We also get some pain because /usr/home ==> /home yet it doesnt WTF (pwd --> /home/...)
-# Workaround this for now:
-ln -sf ${X_SELF_DIR}/obj/mips/mips.mips/usr/home ${X_SELF_DIR}/obj/mips/mips.mips/home
 X_CROSSPATH=${X_SELF_DIR}/obj/mips/mips.mips/${SOURCES}/tmp/usr/bin
+X_FAKEROOT=fakeroot
 
 if [ "x$1" = "xclean" ] ; then
   rm -rf obj root mfsroot* tmp
@@ -122,7 +119,7 @@ build_port()
 
   echo Package: $1
   cd $1
-  fakeroot make DISABLE_MAKE_JOBS=yes \
+  ${X_FAKEROOT} make DISABLE_MAKE_JOBS=yes \
         PORTSDIR=${X_PORTS} \
         DISTDIR=${X_DOWNLOADS} \
         PORT_DBDIR=${X_PORTSBUILD}/db \
@@ -132,7 +129,7 @@ build_port()
         NO_DEPENDS=1 NO_PKG_REGISTER=1 DB_FROM_SRC=1 BUILD_FLAGS=NO_CLEAN=1 \
         -DDISABLE_VULNERABILITIES \
           configure
-  PATH=${X_CROSSPATH}:${PATH} fakeroot make DISABLE_MAKE_JOBS=yes \
+  PATH=${X_CROSSPATH}:${PATH} ${X_FAKEROOT} make DISABLE_MAKE_JOBS=yes \
         PORTSDIR=${X_PORTS} \
         DISTDIR=${X_DOWNLOADS} \
         PORT_DBDIR=${X_PORTSBUILD}/db \
@@ -146,6 +143,11 @@ build_port()
 }
 
 if [ $OPT_PORTS = yes ] ; then
+  # This might not work in all cases, especially if SOURCES is a relative path
+  # We also get some pain because /usr/home ==> /home yet it doesnt WTF (pwd --> /home/...)
+  # Workaround this for now:
+  ln -sf ${X_SELF_DIR}/obj/mips/mips.mips/usr/home ${X_SELF_DIR}/obj/mips/mips.mips/home
+
   echo "Building PORTS using CROSS toolchain `${X_CROSSPATH}/cc -dumpmachine`"
   cd ${X_PORTS}
   build_port  sysutils/less
@@ -179,12 +181,12 @@ cd ${X_SELF_DIR}
 rm -rf mfsroot
 
 cd ${SOURCES}
-fakeroot ${FWB}/build/bin/build carambola2 mfsroot || true
+${FWB}/build/bin/build carambola2 mfsroot || true
 
 
 #INSTALL_PROG="fakeroot install -p -s " 
 # install is stupid it wont copy a symlink as a symlink
-INSTALL_PROG="fakeroot cp -fPRpv "
+INSTALL_PROG="${X_FAKEROOT} cp -fPRpv "
 ${INSTALL_PROG} ${X_SELF_DIR}/scripts/files/rc.conf ${X_STAGING_FSROOT}/c/etc/cfg/
 
 # Features:
@@ -213,8 +215,6 @@ ${INSTALL_PROG} ${X_DESTDIR}/sbin/sha512 ${X_STAGING_FSROOT}/sbin/
 ${INSTALL_PROG} ${X_DESTDIR}/etc/dhclient.conf ${X_STAGING_FSROOT}/c/etc/
 ${INSTALL_PROG} ${X_DESTDIR}/sbin/dhclient ${X_STAGING_FSROOT}/sbin/
 ${INSTALL_PROG} ${X_DESTDIR}/sbin/dhclient-script ${X_STAGING_FSROOT}/sbin/
-${INSTALL_PROG} ${X_DESTDIR}/etc/network.subr ${X_STAGING_FSROOT}/c/etc/
-${INSTALL_PROG} ${X_DESTDIR}/etc/rc.subr ${X_STAGING_FSROOT}/c/etc/
 ${INSTALL_PROG} ${X_DESTDIR}/etc/rc.d/dhclient ${X_STAGING_FSROOT}/c/etc/rc.d/
 
 ${INSTALL_PROG} ${X_DESTDIR}/usr/sbin/pw ${X_STAGING_FSROOT}/usr/sbin/
@@ -231,7 +231,7 @@ if [ $OPT_PORTS_INSTALL = yes ] ; then
 
 	${INSTALL_PROG} ${X_FROM}/bin/netcat ${X_STAGING_FSROOT}/sbin/
 
-	fakeroot install -d ${X_STAGING_FSROOT}/usr/lib/private/
+	${X_FAKEROOT} install -d ${X_STAGING_FSROOT}/usr/lib/private/
 	${INSTALL_PROG} ${X_DESTDIR}/usr/lib/private/libssh.so* ${X_STAGING_FSROOT}/usr/lib/private/
 	${INSTALL_PROG} ${X_DESTDIR}/usr/lib/private/libldns.so* ${X_STAGING_FSROOT}/usr/lib/private/
 	${INSTALL_PROG} ${X_DESTDIR}/usr/bin/scp ${X_STAGING_FSROOT}/usr/bin/
@@ -248,22 +248,15 @@ fi
 sed -e '/^telnet/d' -i "" ${X_STAGING_FSROOT}/c/etc/inetd.conf
 rm ${X_STAGING_FSROOT}/usr/libexec/telnetd
 
-# Testing stuff I was playing around with to get a restricted login.conf working
-if true ; then
-fakeroot pwd_mkdb -d ${X_STAGING_FSROOT}/c/etc ${X_STAGING_FSROOT}/c/etc/master.passwd
-echo root | fakeroot pw -V ${X_STAGING_FSROOT}/c/etc usermod root -h0 -c 'Here\ Lies\ Root' -C ${X_STAGING_FSROOT}/c/etc/pw.conf
-echo user | fakeroot pw -V ${X_STAGING_FSROOT}/c/etc usermod user -h0 -c -C ${X_STAGING_FSROOT}/c/etc/pw.conf
+# Configure some actual passwords
+# Note: requires vt100 in login.conf
+${X_FAKEROOT} pwd_mkdb -d ${X_STAGING_FSROOT}/c/etc ${X_STAGING_FSROOT}/c/etc/master.passwd
+echo root | ${X_FAKEROOT} pw -V ${X_STAGING_FSROOT}/c/etc usermod root -h0 -c 'Here\ Lies\ Root' -C ${X_STAGING_FSROOT}/c/etc/pw.conf
+echo user | ${X_FAKEROOT} pw -V ${X_STAGING_FSROOT}/c/etc usermod user -h0 -c -C ${X_STAGING_FSROOT}/c/etc/pw.conf
 rm ${X_STAGING_FSROOT}/c/etc/spwd.db ${X_STAGING_FSROOT}/c/etc/pwd.db
-# WE NEED vt100 in login.conf or cant login!
-#sed -e '/^exit 0/d' -i "" ${X_STAGING_FSROOT}/c/etc/rc2
-#echo 'pw usershow root' >> ${X_STAGING_FSROOT}/c/etc/rc2
-#echo 'pw usershow user' >> ${X_STAGING_FSROOT}/c/etc/rc2
-#echo 'ls -l /etc' >> ${X_STAGING_FSROOT}/c/etc/rc2
-#echo 'exit 0' >> ${X_STAGING_FSROOT}/c/etc/rc2
-fi
 
 cd ${SOURCES}
-fakeroot ${FWB}/build/bin/build carambola2 fsimage
+${FWB}/build/bin/build carambola2 fsimage
 ${FWB}/build/bin/build carambola2 uboot
 
 # Build a combined flash image. Kernel is first 2MB followed by compressed mfs image

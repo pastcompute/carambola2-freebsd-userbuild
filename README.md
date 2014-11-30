@@ -1,8 +1,10 @@
 # Introduction
 
-Some scripts for tweaking freebsd-wifi-build for the Carambola2, in particular as a normal user instead of root.
+Some scripts for tweaking freebsd-wifi-build for the Carambola2.
+This project initially started because I wanted to build as a normal user instead of root, however has evolved into a 
+more general automation script for my purpose, as user build is becoming the default mode for freebsd-wifi-build.
 
-* Tested build using FreeBSD release/10.0.0 inside a Linux debian wheezy amd64 hosted qemu-kvm machine.
+* Tested build host using FreeBSD release/10.0.0 inside a Linux debian wheezy amd64 hosted qemu-kvm machine.
 * Tested for destination FreeBSD release/10.1.0
 * I also had it working with destination release/10.0.0 but that was early on so I dont know if it will still work.
 
@@ -24,19 +26,8 @@ Some scripts for tweaking freebsd-wifi-build for the Carambola2, in particular a
 
     git clone https://github.com/freebsd/freebsd-wifi-build.git
 
-I also had to hack freebsd-wifi-build to enable building as a normal user.
 
-In file `build/bin/build_freebsd`:
-    
-		@@ -91,7 +103,7 @@ while [ "x$1" != "x" ]; do
-		 
-				    X_DESTDIR_LINE=""
-				    if [ "$1" = "installworld" -o "$1" = "installkernel" -o "$1" = "distribution" ]; then
-		-               X_DESTDIR_LINE="DESTDIR=${X_DESTDIR}"
-		+               X_DESTDIR_LINE="DESTDIR=${X_DESTDIR} -DNO_ROOT"
-				    fi
-
-And to get simplify working with tftp, I cheated and did `chmod 777 /tftpboot`, which also required:
+To get simplify working with tftp, I cheated and did `chmod 777 /tftpboot`, which also required:
 
 		@@ -111,8 +123,8 @@ while [ "x$1" != "x" ]; do
 				    || exit 1
@@ -47,14 +38,7 @@ And to get simplify working with tftp, I cheated and did `chmod 777 /tftpboot`, 
 		+               cp -f ${X_KERNEL} /tftpboot/kernel.${KERNCONF}
 		+               cp -f ${X_KERNEL}.symbols /tftpboot/kernel.${KERNCONF}.symbols
 
-Early I I had to make the following change as well, this may be redundant with 10.1.0 I havent tried reverting.
-
-		@@ -47,7 +47,8 @@ if [ "x${LOCAL_TOOL_DIRS}" != "x" ]; then
-		 fi
-		 
-		 # Create a make.conf
-		-echo "MALLOC_PRODUCTION=" > ${X_DESTDIR}/../make.conf.${BUILDNAME}
-		+echo > ${X_DESTDIR}/../make.conf.${BUILDNAME}
+This may become unnecessary in due course once https://github.com/freebsd/freebsd-wifi-build/issues/4 is resolved.
 
 4. Clone freebsd, or just get the release sources. One way to do this is
 
@@ -65,9 +49,9 @@ Early I I had to make the following change as well, this may be redundant with 1
 
     mkdir portsnap ports ports-distfiles
     portsnap -d portsnap fetch
-    portsnap -p ports extract
+    portsnap -d portsnap -p ports extract
 
-6. Hack configurations, for example `freebsd/sys/mips/conf/CARAMBOLA2` to enable MSDOSFS
+6. Hack configurations, for example `freebsd-release-10.1.0/sys/mips/conf/CARAMBOLA2` to enable MSDOSFS
 
 Instead of modifying freebsd-wifi-build I hacked my own changes into the firmware directory tree inside `build_carambola.sh`
 
@@ -85,7 +69,6 @@ I did also modify freebsd-wifi-scripts to remove more stuff from the world build
 		+echo 'WITHOUT_ZFS="YES"' >> ${X_DESTDIR}/../src.conf.${BUILDNAME}
 		+echo 'WITHOUT_RCS="YES"' >> ${X_DESTDIR}/../src.conf.${BUILDNAME}
 		+echo 'WITH_INSTALL_AS_USER="YES"' >> ${X_DESTDIR}/../src.conf.${BUILDNAME}
-
 
 7. Run `scripts/build_carambola.sh`
 
@@ -112,15 +95,107 @@ Then you can simply hit the reset button on the carambola to test a new firmware
 
 # Issues I discovered
 
+## Ignored uboot environment
+
+FreeBSD kernel ignores the uboot environment. 
+I worked out how to fix this:
+
+    diff --git a/sys/mips/atheros/ar71xx_machdep.c b/sys/mips/atheros/ar71xx_machdep.c
+    index 52f938c..5422324 100644
+    --- a/sys/mips/atheros/ar71xx_machdep.c
+    +++ b/sys/mips/atheros/ar71xx_machdep.c
+    @@ -303,18 +303,33 @@ platform_start(__register_t a0 __unused, __register_t a1 __unused,
+            }
+            else
+                    printf ("argv is invalid");
+    +
+            printf("\n");
+     
+            printf("Environment:\n");
+            if (MIPS_IS_VALID_PTR(envp)) {
+    +#ifndef        AR71XX_ENV_UBOOT
+                    for (i = 0; envp[i]; i+=2) {
+                            printf("  %s = %s\n", envp[i], envp[i+1]);
+                            kern_setenv(envp[i], envp[i+1]);
+                    }
+    +#else
+    +               for (i = 0; envp[i]; i++) {
+    +                       char *sep = strchr(envp[i], '=');
+    +                       *sep = 0;
+    +                       printf("  %s = %s\n", envp[i], sep+1);
+    +                       kern_setenv(envp[i], sep+1);
+    +               }
+    +#endif
+            }
+            else 
+                    printf ("envp is invalid\n");
+
+
+## Switched Ethernet ports
+
 The 'stock' Carambola2 OpenWRT build from 8devices (and the trunk OpenWRT) configures the ethernet ports backwards from
-FreeBSD at least through to 10.1.0, and if my memory serves me right, independently.
+FreeBSD at least through to 10.1.0, and independently routes them, whereas FreeBSD defaults to switched, which is not
+much use as a firewall.
 
-It appears that there are changes in svn_head that may support this mode, but I am still understand where the difference is,
-whether it is a switch configuration thing in OpenWRT or a kernel / chip configuration difference.
+The FreeBSD kernel in -LATEST actually allows the network ports to be swapped.
+I was unable to succesfully buildworld against -LATEST using freebsd-wifi-build but I was however able to use the release-10.1.0
+userland with the -LATEST kernel, the script allows for this by setting ${SOURCES_KERNEL} !
 
-What I have worked out, is that https://github.com/pastcompute/freebsd/commit/d5c874addf86f765e52c446893d83d14e9cca9cd appears
-to do the same as this suggestion for OpenWRT to allow the opposite, http://patchwork.openwrt.org/patch/6217/, but I am still
-trying to get svn_head to behave the same as OpenWRT with this.
+Once that it done you can modify CARAMBOLA2 and CARAMBOLA2 hints:
 
-When I build against svnhead I was able to swap arge0 and arge1 so they now are the same way around as openWRT
-I think it is working in routed mode with the correct hints but I need to do further testing when I get some time.
+    --- a/sys/mips/conf/AR933X_BASE.hints
+    +++ b/sys/mips/conf/AR933X_BASE.hints
+    @@ -22,15 +22,15 @@ hint.ehci.0.maddr=0x1b000100
+     hint.ehci.0.msize=0x00ffff00
+     hint.ehci.0.irq=1
+     
+    -hint.arge.0.at="nexus0"
+    -hint.arge.0.maddr=0x19000000
+    -hint.arge.0.msize=0x1000
+    -hint.arge.0.irq=2
+    -
+     hint.arge.1.at="nexus0"
+    -hint.arge.1.maddr=0x1a000000
+    +hint.arge.1.maddr=0x19000000
+     hint.arge.1.msize=0x1000
+    -hint.arge.1.irq=3
+    +hint.arge.1.irq=2
+    +
+    +hint.arge.0.at="nexus0"
+    +hint.arge.0.maddr=0x1a000000
+    +hint.arge.0.msize=0x1000
+    +hint.arge.0.irq=3
+     
+     # XXX The ath device hangs off of the AHB, rather than the Nexus.
+     hint.ath.0.at="nexus0"
+    diff --git a/sys/mips/conf/CARAMBOLA2.hints b/sys/mips/conf/CARAMBOLA2.hints
+    index 9610337..3eaad71 100644
+    --- a/sys/mips/conf/CARAMBOLA2.hints
+    +++ b/sys/mips/conf/CARAMBOLA2.hints
+    @@ -18,19 +18,19 @@ hint.arswitch.0.is_7240=1
+     hint.arswitch.0.numphys=4
+     hint.arswitch.0.phy4cpu=1      # phy 4 is a "CPU" separate PHY
+     hint.arswitch.0.is_rgmii=0
+    -hint.arswitch.0.is_gmii=1      # arge1 <-> switch PHY is GMII
+    +hint.arswitch.0.is_gmii=1      # arge1^H^H^H^H^H arge0 <-> switch PHY is GMII
+     
+     # OpenWRT cramabola routed ports: ath79_setup_ar933x_phy4_switch(true,true)
+     # --> mac :-> phy_swap, mdio :-> phy_addr_swap
+     
+     # arge0 - MII, autoneg, phy(4)
+    -hint.arge.0.phymask=0x10       # PHY4
+    -hint.arge.0.mdio=mdioproxy1    # .. off of the switch mdiobus
+    +hint.arge.1.phymask=0x10       # PHY4
+    +hint.arge.1.mdio=mdioproxy1    # .. off of the switch mdiobus
+     
+     # arge1 - GMII, 1000/full
+    -hint.arge.1.phymask=0x0                # No directly mapped PHYs
+    -hint.arge.1.media=1000
+    -hint.arge.1.fduplex=1
+    +hint.arge.0.phymask=0x0                # No directly mapped PHYs
+    +hint.arge.0.media=1000
+    +hint.arge.0.fduplex=1
+     hint.ar933x_gmac.0.override_phy=1
+     hint.ar933x_gmac.0.swap_phy=1
+
+
